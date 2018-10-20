@@ -33,9 +33,10 @@ static const int ZERO_CHAR = '0';
 static const int DIRECTIONS_COUNT = 8;
 static const int BYTE_SIZE = 8;
 
-static const int BOARD_WIDTH = 19;
-static const int BOARD_HEIGHT = 10;
-static const int MAXIMUM_ROBOTS_COUNT = 10;
+static const int8_t BOARD_WIDTH = 19;
+static const int8_t BOARD_HEIGHT = 10;
+static const int8_t MAX_ROBOTS_COUNT = 10;
+static const int8_t MAX_CELL_MARKS = 5; // UDLR and Empty
 
 enum class CellType : char {
 	INVALID = '&',
@@ -63,7 +64,6 @@ enum class RobotDirection : char {
 // First 40 bits are showing each robot movement in that cell
 // Next 6 flags are shwoing the type of the cell (void, arrow)
 typedef long long Cell;
-static const Cell DEFAULT_CELL = 0;
 
 namespace Masks {
 	static const Cell VOID	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'1000'0000'0000'0000'0000'0000;
@@ -72,7 +72,266 @@ namespace Masks {
 	static const Cell RIGTH	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0001'0000'0000'0000'0000'0000;
 	static const Cell DOWN	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'1000'0000'0000'0000'0000;
 	static const Cell LEFT	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0100'0000'0000'0000'0000;
+	static const Cell CLEAR = 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0010'0000'0000'0000'0000;
 };
+
+static const Cell DEFAULT_CELL = Masks::CLEAR;
+
+static const Cell POSSIBLE_CELL_MARKS[MAX_CELL_MARKS] = {
+	Masks::EMPTY,
+	Masks::UP,
+	Masks::RIGTH,
+	Masks::DOWN,
+	Masks::LEFT
+};
+
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+
+typedef int8_t Coord;
+const Coord INVALID_COORD = -1;
+
+class Coords {
+public:
+	Coords();
+	Coords(Coord xCoord, Coord yCoord);
+
+	Coord getXCoord() const {
+		return xCoord;
+	}
+
+	Coord getYCoord() const {
+		return yCoord;
+	}
+
+	void setXCoord(Coord xCoord) { this->xCoord = xCoord; }
+	void setYCoord(Coord yCoord) { this->yCoord = yCoord; }
+
+	Coords& operator=(const Coords& other);
+	bool operator==(const Coords& other);
+	Coords operator+(const Coords& other);
+	Coords& operator+=(const Coords& other);
+	Coords operator-(const Coords& other);
+	Coords& operator-=(const Coords& other);
+	Coords operator*(const Coords& other);
+	Coords& operator*=(const Coords& other);
+	Coords operator*(Coord numerical);
+	Coords& operator*=(Coord numerical);
+
+	bool isValid() const;
+	void debug() const;
+	void print() const;
+
+	Coord distance(const Coords& coords) const;
+	void roundCoords();
+	void clamp();
+
+	friend Coord distance(const Coords& point0, const Coords& point1);
+private:
+	Coord xCoord;
+	Coord yCoord;
+};
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Coords::Coords() :
+	xCoord(INVALID_COORD),
+	yCoord(INVALID_COORD)
+{
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Coords::Coords(
+	Coord xCoord,
+	Coord yCoord
+) :
+	xCoord(xCoord),
+	yCoord(yCoord)
+{
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Coords& Coords::operator=(const Coords& other) {
+	if (this != &other) {
+		xCoord = other.xCoord;
+		yCoord = other.yCoord;
+	}
+
+	return *this;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+bool Coords::operator==(const Coords& other) {
+	return (xCoord == other.xCoord) && (yCoord == other.yCoord);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Coords Coords::operator+(const Coords& other) {
+	return Coords(xCoord + other.xCoord, yCoord + other.yCoord);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Coords& Coords::operator+=(const Coords& other) {
+	xCoord += other.xCoord;
+	yCoord += other.yCoord;
+
+	return *this;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Coords Coords::operator-(const Coords& other) {
+	return Coords(xCoord - other.xCoord, yCoord - other.yCoord);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Coords& Coords::operator-=(const Coords& other) {
+	xCoord -= other.xCoord;
+	yCoord -= other.yCoord;
+
+	return *this;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Coords Coords::operator*(const Coords& other) {
+	return Coords(xCoord * other.xCoord, yCoord * other.yCoord);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Coords& Coords::operator*=(const Coords& other) {
+	xCoord *= other.xCoord;
+	yCoord *= other.yCoord;
+
+	return *this;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+bool Coords::isValid() const {
+	return INVALID_COORD != xCoord && INVALID_COORD != yCoord;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Coords::debug() const {
+	cerr << "Position: X=" << xCoord << ", Y=" << yCoord << endl;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Coords::print() const {
+	cout << xCoord << " " << yCoord;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Coord Coords::distance(const Coords& coords) const {
+	Coord kat0 = coords.xCoord - xCoord;
+	Coord kat1 = coords.yCoord - yCoord;
+
+	Coord hip = (Coord)sqrt((kat0 * kat0) + (kat1 * kat1));
+	return hip;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Coords::roundCoords() {
+	xCoord = static_cast<Coord>(round(xCoord));
+	yCoord = static_cast<Coord>(round(yCoord));
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Coords::clamp() {
+	if (xCoord < 0) {
+		xCoord = BOARD_WIDTH - 1;
+	}
+
+	if (xCoord > BOARD_WIDTH - 1) {
+		xCoord = 0;
+	}
+
+	if (yCoord < 0) {
+		yCoord = BOARD_HEIGHT - 1;
+	}
+
+	if (yCoord > BOARD_HEIGHT- 1) {
+		yCoord = 0;
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Coord distance(const Coords& point0, const Coords& point1) {
+	Coord lineXLenght = static_cast<Coord>(abs(point0.xCoord - point1.xCoord));
+	Coord lineYLenght = static_cast<Coord>(abs(point0.yCoord - point1.yCoord));
+
+	Coord distance = static_cast<Coord>(sqrt((lineXLenght * lineXLenght) + (lineYLenght * lineYLenght)));
+
+	return distance;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+enum Direction {
+	DIR_INVALID = -1,
+	DIR_N = 0,
+	DIR_NE,
+	DIR_E,
+	DIR_SE,
+	DIR_S,
+	DIR_SW,
+	DIR_W,
+	DIR_NW,
+};
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Coords DIRECTIONS[DIRECTIONS_COUNT] = {
+	Coords(0, -1), // N
+	Coords(1, -1), // NE
+	Coords(1,  0), // E
+	Coords(1,  1), // SE
+	Coords(0,  1), // S
+	Coords(-1,  1), // SW
+	Coords(-1,  0), // W
+	Coords(-1, -1)  // NW
+};
+
+
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
 
 class Board {
 public:
@@ -84,6 +343,9 @@ public:
 
 	void init();
 	void addRow(int rowIdx, const string& line);
+	void findFirstClearCell(Coords firstClearCell) const;
+
+	bool isMarkPossible(const Coords& clearCellCoords, Cell mark) const;
 
 private:
 	Cell gameBoard[BOARD_HEIGHT][BOARD_WIDTH];
@@ -127,8 +389,8 @@ Board& Board::operator=(const Board& board) {
 //*************************************************************************************************************
 
 void Board::init() {
-	for (int rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
-		for (int colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
+	for (int8_t rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
+		for (int8_t colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
 			gameBoard[rowIdx][colIdx] = DEFAULT_CELL;
 		}
 	}
@@ -138,34 +400,65 @@ void Board::init() {
 //*************************************************************************************************************
 
 void Board::addRow(int rowIdx, const string& line) {
-	for (int colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
+	for (int8_t colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
+		Cell& cell = gameBoard[rowIdx][colIdx];
+
 		switch (static_cast<CellType>(line[colIdx])) {
 			case (CellType::VOID): {
-				gameBoard[rowIdx][colIdx] |= Masks::VOID;
+				cell |= Masks::VOID;
 				break;
 			}
 			case (CellType::EMPTY_PLATFORM): {
-				gameBoard[rowIdx][colIdx] |= Masks::EMPTY;
+				cell |= Masks::EMPTY;
 				break;
 			}
 			case (CellType::UP_ARROW): {
-				gameBoard[rowIdx][colIdx] |= Masks::UP;
+				cell |= Masks::UP;
 				break;
 			}
 			case (CellType::RIGHT_ARROW ): {
-				gameBoard[rowIdx][colIdx] |= Masks::RIGTH;
+				cell |= Masks::RIGTH;
 				break;
 			}
 			case (CellType::DOWN_ARROW): {
-				gameBoard[rowIdx][colIdx] |= Masks::DOWN;
+				cell |= Masks::DOWN;
 				break;
 			}
 			case (CellType::LEFT_ARROW): {
-				gameBoard[rowIdx][colIdx] |= Masks::LEFT;
+				cell |= Masks::LEFT;
 				break;
 			}
 			default: {
 				break;
+			}
+		}
+
+		cell &= ~Masks::CLEAR; // Unset CLEAR mark
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::copyGameBoard(const Board& board) {
+	for (int8_t rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
+		for (int8_t colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
+			gameBoard[rowIdx][colIdx] = board.gameBoard[rowIdx][colIdx];
+		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::findFirstClearCell(Coords firstClearCell) const {
+	for (int8_t rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
+		for (int8_t colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
+			if (gameBoard[rowIdx][colIdx] & Masks::CLEAR) {
+				firstClearCell.setXCoord(colIdx);
+				firstClearCell.setYCoord(rowIdx);
+
+				return; // Fastest way to exit the two loops, without if check for the outer
 			}
 		}
 	}
@@ -174,12 +467,35 @@ void Board::addRow(int rowIdx, const string& line) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Board::copyGameBoard(const Board& board) {
-	for (int rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
-		for (int colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
-			gameBoard[rowIdx][colIdx] = board.gameBoard[rowIdx][colIdx];
+bool Board::isMarkPossible(const Coords& clearCellCoords, Cell mark) const {
+	Direction dir;
+	
+	switch (mark) {
+		case (Masks::UP): {
+			dir = DIR_N;
+			break;
+		}
+		case (Masks::LEFT): {
+			dir = DIR_W;
+			break;
+		}
+		case (Masks::DOWN): {
+			dir = DIR_S;
+			break;
+		}
+		case (Masks::RIGTH): {
+			dir = DIR_E;
+			break;
+		}
+		default: {
+			break;
 		}
 	}
+
+	Coords newCoords =  DIRECTIONS[dir] + clearCellCoords;
+	newCoords.clamp();
+
+	return !(gameBoard[newCoords.getYCoord()][newCoords.getXCoord()] & Masks::VOID);
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -260,6 +576,14 @@ public:
 	State(const State& state);
 	~State();
 
+	int8_t getRobotsCount() const { return robotsCount; }
+	int getScore() const { return score; }
+	const string& getString() const { return move; }
+
+	void setRobotsCount(int8_t robotsCount) { this->robotsCount = robotsCount; }
+	void setScore(int score) { this->score = score; }
+	void setMove(const string& move) { this->move = move; }
+
 	State& operator=(const State& state);
 
 	void addBoardRow(int rowIdx, const string& line);
@@ -270,11 +594,16 @@ public:
 		RobotDirection direction
 	);
 
+	void findFirstClearCell(Coords& clearCellCoords) const;
+
+	bool isMarkPossible(const Coords& clearCellCoords, Cell mark) const;
+
 private:
 	Board board;
-	Robot robots[MAXIMUM_ROBOTS_COUNT];
+	Robot robots[MAX_ROBOTS_COUNT];
 	int8_t robotsCount;
 	int score;
+	string move;
 
 	void copyRobots(const State& state);
 };
@@ -285,7 +614,8 @@ private:
 State::State() :
 	board(),
 	robotsCount(0),
-	score(0)
+	score(0),
+	move(EMPTY_STRING)
 {
 	// Robots will be automatically created with Robot()
 }
@@ -296,7 +626,8 @@ State::State() :
 State::State(const State& state) :
 	board(state.board),
 	robotsCount(state.robotsCount),
-	score(state.score)
+	score(state.score),
+	move(state.move)
 {
 	copyRobots(state);
 }
@@ -316,6 +647,7 @@ State& State::operator=(const State& state) {
 		board = state.board;
 		robotsCount = state.robotsCount;
 		score = state.score;
+		move = state.move;
 
 		copyRobots(state);
 	}
@@ -348,8 +680,22 @@ void State::addRobot(
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+void State::findFirstClearCell(Coords& clearCellCoords) const {
+	board.findFirstClearCell(clearCellCoords);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+bool State::isMarkPossible(const Coords& clearCellCoords, Cell mark) const {
+	return board.isMarkPossible(clearCellCoords, mark);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
 void State::copyRobots(const State& state) {
-	for (int robotIdx = 0; robotIdx < MAXIMUM_ROBOTS_COUNT; ++robotIdx) {
+	for (int robotIdx = 0; robotIdx < state.getRobotsCount(); ++robotIdx) {
 		robots[robotIdx] = state.robots[robotIdx];
 	}
 }
@@ -392,12 +738,17 @@ public:
 		return inFrontier;
 	}
 
+	const State& getState() const {
+		return state;
+	}
+
 	void setId(NodeId id) { this->id = id; }
 	void setNodeDepth(int nodeDepth) { this->nodeDepth = nodeDepth; }
 	void setParentId(NodeId parentId) { this->parentId = parentId; }
 	void setRootNode(bool rootNote) { this->rootNote = rootNote; }
 	void setExplored(bool explored) { this->explored = explored; }
 	void setInFrontier(bool inFrontier) { this->inFrontier = inFrontier; }
+	void setState(const State& state) { this->state = state; }
 
 private:
 	NodeId id;
@@ -452,6 +803,7 @@ Node::~Node() {
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 
+typedef vector<NodeId> NodesList;
 typedef vector<NodeId> ChildrenList;
 typedef map<NodeId, ChildrenList> GraphMap;
 typedef map<NodeId, Node*> IdNodeMap;
@@ -862,23 +1214,24 @@ GameTree::~GameTree() {
 //*************************************************************************************************************
 
 void GameTree::build() {
-	// The parent of the whole game tree
 	const NodeId rootId = gameTree.createNode(INVALID_NODE_ID, turnState);
 
-	// // A queue with states
-	// NodeQueue nodesQueue;
-	// nodesQueue.push(rootId);
-	// 
-	// while (!nodesQueue.empty()) {
-	// 	const NodeId parentId = nodesQueue.front();
-	// 	nodesQueue.pop();
-	// 
-	// 	ChildrenList children;
-	// 	createChildren(parentId, children);
-	// 	for (size_t childIdx = 0; childIdx < children.size(); ++childIdx) {
-	// 		nodesQueue.push(children[childIdx]);
-	// 	}
-	// }
+	// Sorted list for the nodes to explore
+	// ENDING with the highest score state
+	NodesList nodesForntier;
+	nodesForntier.push_back(rootId);
+
+	while (!nodesForntier.empty()) {
+		const NodeId parentId = nodesForntier.back();
+		nodesForntier.pop_back();
+
+		ChildrenList children;
+		createChildren(parentId, children);
+		// eventually sort children
+	 	for (size_t childIdx = 0; childIdx < children.size(); ++childIdx) {
+			nodesForntier.push_back(children[childIdx]);
+		}
+	}
 }
 
 //*************************************************************************************************************
@@ -887,6 +1240,23 @@ void GameTree::build() {
 void GameTree::createChildren(NodeId parentId, ChildrenList& children) {
 	Node* parent = gameTree.getNode(parentId);
 	int parentDepth = parent->getNodeDepth();
+
+	const State& parentState = parent->getState();
+	// Find first clear cell
+	Coords clearCellCoords;
+	parentState.findFirstClearCell(clearCellCoords);
+
+	// Generate all possible states based on the parent state
+	for (Cell mark : POSSIBLE_CELL_MARKS) {
+		if (parentState.isMarkPossible(clearCellCoords, mark)) {
+			// First create the node
+			NodeId childNodeId = gameTree.createNode(parent->getId(), parentState);
+
+			// Then simulate from the tree directly, to make one less copy
+		//	gameTree.getNode(childNodeId)->getState().simulate(clearCellCoords, mark);
+			children.push_back(childNodeId);
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -974,7 +1344,7 @@ void Game::gameLoop() {
 //*************************************************************************************************************
 
 void Game::getGameInput() {
-	for (int rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
+	for (int8_t rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
 		string line;
 		cin >> line; cin.ignore();
 
