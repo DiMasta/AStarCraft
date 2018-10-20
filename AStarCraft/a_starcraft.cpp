@@ -66,24 +66,29 @@ typedef long long Cell;
 static const Cell DEFAULT_CELL = 0;
 
 namespace Masks {
-	static const Cell VOID	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'1000'0000'0000'0000'0000'0000'0000;
-	static const Cell EMPTY	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0100'0000'0000'0000'0000'0000'0000;
-	static const Cell UP	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0010'0000'0000'0000'0000'0000'0000;
-	static const Cell RIGTH	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0001'0000'0000'0000'0000'0000'0000;
-	static const Cell DOWN	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'1000'0000'0000'0000'0000'0000;
-	static const Cell LEFT	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0100'0000'0000'0000'0000'0000;
+	static const Cell VOID	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'1000'0000'0000'0000'0000'0000;
+	static const Cell EMPTY	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0100'0000'0000'0000'0000'0000;
+	static const Cell UP	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0010'0000'0000'0000'0000'0000;
+	static const Cell RIGTH	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0001'0000'0000'0000'0000'0000;
+	static const Cell DOWN	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'1000'0000'0000'0000'0000;
+	static const Cell LEFT	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0100'0000'0000'0000'0000;
 };
 
 class Board {
 public:
 	Board();
+	Board(const Board& board);
 	~Board();
+
+	Board& operator=(const Board& board);
 
 	void init();
 	void addRow(int rowIdx, const string& line);
 
 private:
-	Cell board[BOARD_HEIGHT][BOARD_WIDTH];
+	Cell gameBoard[BOARD_HEIGHT][BOARD_WIDTH];
+
+	void copyGameBoard(const Board& board);
 };
 
 //*************************************************************************************************************
@@ -96,8 +101,26 @@ Board::Board() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+Board::Board(const Board& board) {
+	copyGameBoard(board);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
 Board::~Board() {
 
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Board& Board::operator=(const Board& board) {
+	if (this != &board) {
+		copyGameBoard(board);
+	}
+
+	return *this;
 }
 
 //*************************************************************************************************************
@@ -106,7 +129,7 @@ Board::~Board() {
 void Board::init() {
 	for (int rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
 		for (int colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
-			board[rowIdx][colIdx] = DEFAULT_CELL;
+			gameBoard[rowIdx][colIdx] = DEFAULT_CELL;
 		}
 	}
 }
@@ -118,32 +141,43 @@ void Board::addRow(int rowIdx, const string& line) {
 	for (int colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
 		switch (static_cast<CellType>(line[colIdx])) {
 			case (CellType::VOID): {
-				board[rowIdx][colIdx] |= Masks::VOID;
+				gameBoard[rowIdx][colIdx] |= Masks::VOID;
 				break;
 			}
 			case (CellType::EMPTY_PLATFORM): {
-				board[rowIdx][colIdx] |= Masks::EMPTY;
+				gameBoard[rowIdx][colIdx] |= Masks::EMPTY;
 				break;
 			}
 			case (CellType::UP_ARROW): {
-				board[rowIdx][colIdx] |= Masks::UP;
+				gameBoard[rowIdx][colIdx] |= Masks::UP;
 				break;
 			}
 			case (CellType::RIGHT_ARROW ): {
-				board[rowIdx][colIdx] |= Masks::RIGTH;
+				gameBoard[rowIdx][colIdx] |= Masks::RIGTH;
 				break;
 			}
 			case (CellType::DOWN_ARROW): {
-				board[rowIdx][colIdx] |= Masks::DOWN;
+				gameBoard[rowIdx][colIdx] |= Masks::DOWN;
 				break;
 			}
 			case (CellType::LEFT_ARROW): {
-				board[rowIdx][colIdx] |= Masks::LEFT;
+				gameBoard[rowIdx][colIdx] |= Masks::LEFT;
 				break;
 			}
 			default: {
 				break;
 			}
+		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::copyGameBoard(const Board& board) {
+	for (int rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
+		for (int colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
+			gameBoard[rowIdx][colIdx] = board.gameBoard[rowIdx][colIdx];
 		}
 	}
 }
@@ -156,7 +190,10 @@ void Board::addRow(int rowIdx, const string& line) {
 class Robot {
 public:
 	Robot();
+	Robot(const Robot& robot);
 	~Robot();
+
+	Robot& operator=(const Robot& robot);
 
 	int8_t getXPos() const { return xPos; }
 	int8_t getYPos() const { return yPos; }
@@ -182,12 +219,34 @@ Robot::Robot() :
 {
 
 }
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Robot::Robot(const Robot& robot) :
+	xPos(robot.xPos),
+	yPos(robot.yPos),
+	direction(robot.direction)
+{
+}
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
 Robot::~Robot() {
 
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Robot& Robot::operator=(const Robot& robot) {
+	if (this != &robot) {
+		xPos = robot.xPos;
+		yPos = robot.yPos;
+		direction = robot.direction;
+	}
+
+	return *this;
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -198,7 +257,10 @@ Robot::~Robot() {
 class State {
 public:
 	State();
+	State(const State& state);
 	~State();
+
+	State& operator=(const State& state);
 
 	void addBoardRow(int rowIdx, const string& line);
 
@@ -212,6 +274,9 @@ private:
 	Board board;
 	Robot robots[MAXIMUM_ROBOTS_COUNT];
 	int8_t robotsCount;
+	int score;
+
+	void copyRobots(const State& state);
 };
 
 //*************************************************************************************************************
@@ -219,7 +284,8 @@ private:
 
 State::State() :
 	board(),
-	robotsCount(0)
+	robotsCount(0),
+	score(0)
 {
 	// Robots will be automatically created with Robot()
 }
@@ -227,8 +293,34 @@ State::State() :
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+State::State(const State& state) :
+	board(state.board),
+	robotsCount(state.robotsCount),
+	score(state.score)
+{
+	copyRobots(state);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
 State::~State() {
 
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+State& State::operator=(const State& state) {
+	if (this != &state) {
+		board = state.board;
+		robotsCount = state.robotsCount;
+		score = state.score;
+
+		copyRobots(state);
+	}
+	
+	return *this;
 }
 
 //*************************************************************************************************************
@@ -253,6 +345,15 @@ void State::addRobot(
 	++robotsCount;
 }
 
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void State::copyRobots(const State& state) {
+	for (int robotIdx = 0; robotIdx < MAXIMUM_ROBOTS_COUNT; ++robotIdx) {
+		robots[robotIdx] = state.robots[robotIdx];
+	}
+}
+
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
@@ -264,7 +365,7 @@ const NodeId INVALID_NODE_ID = -1;
 class Node {
 public:
 	Node();
-	Node(NodeId id, int nodeDepth, NodeId parentId, bool rootNote, bool explored, bool inFrontier);
+	Node(NodeId id, int nodeDepth, NodeId parentId, const State& state, bool rootNote, bool explored, bool inFrontier);
 	~Node();
 
 	NodeId getId() const {
@@ -305,6 +406,8 @@ private:
 	bool rootNote;
 	bool explored;
 	bool inFrontier;
+
+	State state;
 };
 
 //*************************************************************************************************************
@@ -314,6 +417,7 @@ Node::Node() :
 	id(INVALID_NODE_ID),
 	nodeDepth(INVALID_NODE_DEPTH),
 	parentId(INVALID_NODE_ID),
+	state(),
 	rootNote(false),
 	explored(false),
 	inFrontier(false)
@@ -324,10 +428,11 @@ Node::Node() :
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-Node::Node(NodeId id, int nodeDepth, NodeId parentId, bool rootNote, bool explored, bool inFrontier) :
+Node::Node(NodeId id, int nodeDepth, NodeId parentId, const State& state, bool rootNote, bool explored, bool inFrontier) :
 	id(id),
 	nodeDepth(nodeDepth),
 	parentId(parentId),
+	state(state),
 	rootNote(rootNote),
 	explored(explored),
 	inFrontier(inFrontier)
@@ -381,7 +486,12 @@ public:
 	void setIdNodeMap(IdNodeMap idNodeMap) { this->idNodeMap = idNodeMap; }
 
 	void addEdge(NodeId parentId, NodeId childId);
-	void createNode(NodeId nodeId, int nodeDepth, NodeId parentId);
+
+	NodeId createNode(
+		NodeId parentId,
+		const State& gameState
+	);
+
 	void clear();
 	bool nodeCreated(NodeId nodeId) const;
 	void deleteAllNodes();
@@ -667,13 +777,29 @@ void Graph::addEdge(NodeId parentId, NodeId childId) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Graph::createNode(NodeId nodeId, int nodeDepth, NodeId parentId) {
+NodeId Graph::createNode(
+	NodeId parentId,
+	const State& gameState
+) {
+	NodeId nodeId = nodesCount;
+
 	if (!nodeCreated(nodeId)) {
-		Node* node = new Node(nodeId, nodeDepth, parentId, false, false, false);
+		int nodeDepth = 0;
+		if (parentId != INVALID_NODE_ID) {
+			nodeDepth = 1 + idNodeMap[parentId]->getNodeDepth();
+		}
+
+		Node* node = new Node(nodeId, nodeDepth, parentId, gameState, false, false, false);
 		idNodeMap[nodeId] = node;
 		graph[nodeId];
+
+		if (INVALID_NODE_ID != parentId) {
+			graph[parentId].push_back(nodeId);
+		}
 		++nodesCount;
 	}
+
+	return nodeId;
 }
 
 //*************************************************************************************************************
@@ -689,6 +815,78 @@ void Graph::clear() {
 
 bool Graph::nodeCreated(NodeId nodeId) const {
 	return idNodeMap.end() != idNodeMap.find(nodeId);
+}
+
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+
+class GameTree {
+public:
+	GameTree();
+
+	~GameTree();
+
+	State getTurnState() const { return turnState; }
+
+	void setTurnState(const State& turnState) { this->turnState = turnState; }
+
+	void build();
+	void createChildren(NodeId parentId, ChildrenList& children);
+
+private:
+	State turnState;
+
+	Graph gameTree;
+};
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+GameTree::GameTree() :
+	turnState(),
+	gameTree()
+{
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+GameTree::~GameTree() {
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameTree::build() {
+	// The parent of the whole game tree
+	const NodeId rootId = gameTree.createNode(INVALID_NODE_ID, turnState);
+
+	// // A queue with states
+	// NodeQueue nodesQueue;
+	// nodesQueue.push(rootId);
+	// 
+	// while (!nodesQueue.empty()) {
+	// 	const NodeId parentId = nodesQueue.front();
+	// 	nodesQueue.pop();
+	// 
+	// 	ChildrenList children;
+	// 	createChildren(parentId, children);
+	// 	for (size_t childIdx = 0; childIdx < children.size(); ++childIdx) {
+	// 		nodesQueue.push(children[childIdx]);
+	// 	}
+	// }
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameTree::createChildren(NodeId parentId, ChildrenList& children) {
+	Node* parent = gameTree.getNode(parentId);
+	int parentDepth = parent->getNodeDepth();
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -718,6 +916,7 @@ private:
 	int turnsCount;
 
 	State gameState;
+	GameTree gameTree;
 };
 
 //*************************************************************************************************************
@@ -725,7 +924,8 @@ private:
 
 Game::Game() :
 	turnsCount(0),
-	gameState()
+	gameState(),
+	gameTree()
 {
 
 }
@@ -813,6 +1013,9 @@ void Game::turnBegin() {
 //*************************************************************************************************************
 
 void Game::makeTurn() {
+	gameTree.setTurnState(gameState);
+	gameTree.build();
+
 	//cout << "0 0 U 1 1 R 2 2 D 3 3 L" << endl;
 	//cout << "3 4 R 4 4 R 5 4 L" << endl;
 	cout << "0 0 U" << endl;
