@@ -25,6 +25,7 @@ using namespace std;
 static const string INPUT_FILE_NAME = "input.txt";
 static const string OUTPUT_FILE_NAME = "output.txt";
 static const string EMPTY_STRING = "";
+static const string SPACE = " ";
 
 static const int INVALID_ID = -1;
 static const int INVALID_NODE_DEPTH = -1;
@@ -348,12 +349,18 @@ public:
 	void findFirstClearCell(Coords firstClearCell) const;
 	void markCell(const Coords& clearCellCoords, Cell mark);
 	void setRobotTrace(
-		int8_t robotIdx,
 		const Coords& position,
-		RobotDirection direction
+		Cell robotDirectionFlag
 	);
 
+
 	bool isMarkPossible(const Coords& clearCellCoords, Cell mark) const;
+
+	/// Returns true if the robot already was there in the same postion
+	bool checkRobotDirection(
+		const Coords& position,
+		Cell robotDirectionFlag
+	) const;
 
 	Cell getCell(const Coords& coords) const;
 
@@ -487,36 +494,10 @@ void Board::markCell(const Coords& clearCellCoords, Cell mark) {
 //*************************************************************************************************************
 
 void Board::setRobotTrace(
-	int8_t robotIdx,
 	const Coords& position,
-	RobotDirection direction
+	Cell robotDirectionFlag
 ){
-	Cell flag = Masks::FLAG;
-	flag >>= robotIdx * ROBOT_DIRECTION;
-
-	switch (direction) {
-		case RobotDirection::UP: {
-			flag >>= 0;
-			break;
-		}
-		case RobotDirection::RIGHT: {
-			flag >>= 1;
-			break;
-		}
-		case RobotDirection::DOWN: {
-			flag >>= 2;
-			break;
-		}
-		case RobotDirection::LEFT: {
-			flag >>= 3;
-			break;
-		}
-		default: {
-			break;
-		}
-	}
-
-	gameBoard[position.getYCoord()][position.getXCoord()] |= flag;
+	gameBoard[position.getYCoord()][position.getXCoord()] |= robotDirectionFlag;
 }
 
 //*************************************************************************************************************
@@ -556,6 +537,16 @@ bool Board::isMarkPossible(const Coords& clearCellCoords, Cell mark) const {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+bool Board::checkRobotDirection(
+	const Coords& position,
+	Cell robotDirectionFlag
+) const {
+	return gameBoard[position.getYCoord()][position.getXCoord()] & robotDirectionFlag;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
 Cell Board::getCell(const Coords& coords) const {
 	return gameBoard[coords.getYCoord()][coords.getXCoord()];
 }
@@ -581,6 +572,9 @@ public:
 
 	void move();
 	void rotate(Cell cell);
+	void destroyRobot();
+
+	bool isDead() const;
 
 private:
 	Coords position;
@@ -678,6 +672,20 @@ void Robot::rotate(Cell cell) {
 	}
 }
 
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Robot::destroyRobot() {
+	setPosition(Coords(INVALID_COORD, INVALID_COORD));
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+bool Robot::isDead() const {
+	return position.isValid();
+}
+
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
@@ -712,6 +720,10 @@ public:
 	void simulateRobots();
 
 	bool isMarkPossible(const Coords& clearCellCoords, Cell mark) const;
+
+	Cell makeRobotDirectionFlag(RobotDirection robotDirection, int8_t robotIdx) const;
+
+	void convertToMove(const Coords& clearCellCoords, Cell mark, string& res) const;
 
 private:
 	Board board;
@@ -807,6 +819,8 @@ void State::simulate(const Coords& clearCellCoords, Cell mark) {
 	board.markCell(clearCellCoords, mark);
 
 	simulateRobots();
+
+	convertToMove(clearCellCoords, mark, move);
 }
 
 //*************************************************************************************************************
@@ -814,23 +828,25 @@ void State::simulate(const Coords& clearCellCoords, Cell mark) {
 
 void State::simulateRobots() {
 	for (int8_t robotIdx = 0; robotIdx < robotsCount; ++robotIdx) {
-		//if robot alife
 		Robot& robot = robots[robotIdx];
 
-		// mark the current cell of the robot
-		board.setRobotTrace(robotIdx, robot.getPosiiton(), robot.getDirection());
+		if (!robot.isDead()) {
+			// mark the current cell of the robot
+			board.setRobotTrace(robot.getPosiiton(), makeRobotDirectionFlag(robot.getDirection(), robotIdx));
 
-		robot.move();
-		Cell newRobotCell = board.getCell(robot.getPosiiton());
+			robot.move();
+			Cell newRobotCell = board.getCell(robot.getPosiiton());
 
-		if (newRobotCell & Masks::VOID) {
-			// robot dead
-		}
-		else {
-			robot.rotate(newRobotCell);
-			
-			// robot dead
-			
+			if (newRobotCell & Masks::VOID) {
+				robot.destroyRobot();
+			}
+			else {
+				robot.rotate(newRobotCell);
+
+				if (board.checkRobotDirection(robot.getPosiiton(), makeRobotDirectionFlag(robot.getDirection(), robotIdx))) {
+					robot.destroyRobot();
+				}
+			}
 		}
 	}
 }
@@ -840,6 +856,65 @@ void State::simulateRobots() {
 
 bool State::isMarkPossible(const Coords& clearCellCoords, Cell mark) const {
 	return board.isMarkPossible(clearCellCoords, mark);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Cell State::makeRobotDirectionFlag(RobotDirection robotDirection, int8_t robotIdx) const {
+	Cell flag = Masks::FLAG;
+	flag >>= robotIdx * ROBOT_DIRECTION;
+
+	switch (robotDirection) {
+		case RobotDirection::UP: {
+			flag >>= 0;
+			break;
+		}
+		case RobotDirection::RIGHT: {
+			flag >>= 1;
+			break;
+		}
+		case RobotDirection::DOWN: {
+			flag >>= 2;
+			break;
+		}
+		case RobotDirection::LEFT: {
+			flag >>= 3;
+			break;
+		}
+		default: {
+			break;
+		}
+	}
+
+	return flag;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+ void State::convertToMove(const Coords & clearCellCoords, Cell mark, string& res) const {
+	res = EMPTY_STRING;
+	res += to_string(clearCellCoords.getXCoord());
+	res += SPACE;
+	res += to_string(clearCellCoords.getYCoord());
+	res += SPACE;
+
+	if (mark & Masks::UP) {
+		res += static_cast<char>(CellType::UP_ARROW);
+	}
+
+	if (mark & Masks::RIGTH) {
+		res += static_cast<char>(CellType::RIGHT_ARROW);
+	}
+
+	if (mark & Masks::DOWN) {
+		res += static_cast<char>(CellType::DOWN_ARROW);
+	}
+
+	if (mark & Masks::LEFT) {
+		res += static_cast<char>(CellType::LEFT_ARROW);
+	}
 }
 
 //*************************************************************************************************************
