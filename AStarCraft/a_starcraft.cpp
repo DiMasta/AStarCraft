@@ -158,19 +158,27 @@ public:
 	Robot();
 	~Robot();
 
+	int8_t getXPos() const { return xPos; }
+	int8_t getYPos() const { return yPos; }
+	RobotDirection getDirection() { return direction; }
+
+	void setXPos(int8_t xPos) { this->xPos = xPos; }
+	void setYPos(int8_t yPos) { this->yPos = yPos; }
+	void setDirection(RobotDirection direction) { this->direction = direction; }
+
 private:
-	RobotDirection direction;
 	int8_t xPos;
 	int8_t yPos;
+	RobotDirection direction;
 };
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
 Robot::Robot() :
-	direction(RobotDirection::INVALID),
 	xPos(0),
-	yPos(0)
+	yPos(0),
+	direction(RobotDirection::INVALID)
 {
 
 }
@@ -193,18 +201,27 @@ public:
 	~State();
 
 	void addBoardRow(int rowIdx, const string& line);
+
+	void addRobot(
+		int8_t xPos,
+		int8_t yPos,
+		RobotDirection direction
+	);
+
 private:
 	Board board;
 	Robot robots[MAXIMUM_ROBOTS_COUNT];
+	int8_t robotsCount;
 };
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
 State::State() :
-	board()
+	board(),
+	robotsCount(0)
 {
-
+	// Robots will be automatically created with Robot()
 }
 
 //*************************************************************************************************************
@@ -219,6 +236,21 @@ State::~State() {
 
 void State::addBoardRow(int rowIdx, const string& line) {
 	board.addRow(rowIdx, line);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void State::addRobot(
+	int8_t xPos,
+	int8_t yPos,
+	RobotDirection direction
+) {
+	robots[robotsCount].setXPos(xPos);
+	robots[robotsCount].setYPos(yPos);
+	robots[robotsCount].setDirection(direction);
+
+	++robotsCount;
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -756,6 +788,12 @@ void Game::getGameInput() {
 		int y;
 		string direction;
 		cin >> x >> y >> direction; cin.ignore();
+
+		gameState.addRobot(
+			static_cast<int8_t>(x),
+			static_cast<int8_t>(y),
+			static_cast<RobotDirection>(direction[0])
+		);
 	}
 }
 
@@ -776,7 +814,8 @@ void Game::turnBegin() {
 
 void Game::makeTurn() {
 	//cout << "0 0 U 1 1 R 2 2 D 3 3 L" << endl;
-	cout << "3 4 R 4 4 R 5 4 L" << endl;
+	//cout << "3 4 R 4 4 R 5 4 L" << endl;
+	cout << "0 0 U" << endl;
 }
 
 //*************************************************************************************************************
