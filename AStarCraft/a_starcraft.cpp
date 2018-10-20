@@ -31,7 +31,7 @@ static const int INVALID_ID = -1;
 static const int INVALID_NODE_DEPTH = -1;
 static const int TREE_ROOT_NODE_DEPTH = 1;
 static const int ZERO_CHAR = '0';
-static const int DIRECTIONS_COUNT = 8;
+static const int DIRECTIONS_COUNT = 9;
 static const int BYTE_SIZE = 8;
 
 static const int8_t ROBOT_DIRECTION = 4;
@@ -314,6 +314,7 @@ enum Direction {
 	DIR_SW,
 	DIR_W,
 	DIR_NW,
+	DIR_STAY,
 };
 
 //*************************************************************************************************************
@@ -327,7 +328,8 @@ Coords DIRECTIONS[DIRECTIONS_COUNT] = {
 	Coords(0,  1), // S
 	Coords(-1,  1), // SW
 	Coords(-1,  0), // W
-	Coords(-1, -1)  // NW
+	Coords(-1, -1),  // NW
+	Coords(0, 0) // STAY
 };
 
 
@@ -346,7 +348,7 @@ public:
 
 	void init();
 	void addRow(int rowIdx, const string& line);
-	void findFirstClearCell(Coords firstClearCell) const;
+	void findFirstClearCell(Coords& firstClearCell) const;
 	void markCell(const Coords& clearCellCoords, Cell mark);
 	void setRobotTrace(
 		const Coords& position,
@@ -419,8 +421,9 @@ void Board::init() {
 void Board::addRow(int rowIdx, const string& line) {
 	for (int8_t colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
 		Cell& cell = gameBoard[rowIdx][colIdx];
+		CellType cellType = static_cast<CellType>(line[colIdx]);
 
-		switch (static_cast<CellType>(line[colIdx])) {
+		switch (cellType) {
 			case (CellType::VOID): {
 				cell |= Masks::VOID;
 				break;
@@ -450,7 +453,11 @@ void Board::addRow(int rowIdx, const string& line) {
 			}
 		}
 
-		cell &= ~Masks::CLEAR; // Unset CLEAR mark
+		// At the beginning the empty cells are not considered clear
+		// They are set to empty and not clear when expanding the tree as one of the options
+		if (CellType::EMPTY_PLATFORM != cellType) {
+			cell &= ~Masks::CLEAR; // Unset CLEAR mark
+		}
 	}
 }
 
@@ -468,7 +475,7 @@ void Board::copyGameBoard(const Board& board) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Board::findFirstClearCell(Coords firstClearCell) const {
+void Board::findFirstClearCell(Coords& firstClearCell) const {
 	for (int8_t rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
 		for (int8_t colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
 			if (gameBoard[rowIdx][colIdx] & Masks::CLEAR) {
@@ -504,7 +511,12 @@ void Board::setRobotTrace(
 //*************************************************************************************************************
 
 bool Board::isMarkPossible(const Coords& clearCellCoords, Cell mark) const {
-	Direction dir;
+	// If staying empty, won't go to VOID
+	if (Masks::EMPTY == mark) {
+		return true;
+	}
+
+	Direction dir = DIR_STAY;
 	
 	switch (mark) {
 		case (Masks::UP): {
@@ -683,7 +695,7 @@ void Robot::destroyRobot() {
 //*************************************************************************************************************
 
 bool Robot::isDead() const {
-	return position.isValid();
+	return !position.isValid();
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -698,10 +710,12 @@ public:
 	~State();
 
 	int8_t getRobotsCount() const { return robotsCount; }
+	int8_t getFunctioningRobotsCount() const { return functioningRobotsCount; }
 	int getScore() const { return score; }
 	const string& getString() const { return move; }
 
 	void setRobotsCount(int8_t robotsCount) { this->robotsCount = robotsCount; }
+	void setFunctioningRobotsCount(int8_t functioningRobotsCount) { this->functioningRobotsCount = functioningRobotsCount; }
 	void setScore(int score) { this->score = score; }
 	void setMove(const string& move) { this->move = move; }
 
@@ -729,6 +743,7 @@ private:
 	Board board;
 	Robot robots[MAX_ROBOTS_COUNT];
 	int8_t robotsCount;
+	int8_t functioningRobotsCount;
 	int score;
 	string move;
 
@@ -741,6 +756,7 @@ private:
 State::State() :
 	board(),
 	robotsCount(0),
+	functioningRobotsCount(0),
 	score(0),
 	move(EMPTY_STRING)
 {
@@ -753,6 +769,7 @@ State::State() :
 State::State(const State& state) :
 	board(state.board),
 	robotsCount(state.robotsCount),
+	functioningRobotsCount(state.functioningRobotsCount),
 	score(state.score),
 	move(state.move)
 {
@@ -773,6 +790,7 @@ State& State::operator=(const State& state) {
 	if (this != &state) {
 		board = state.board;
 		robotsCount = state.robotsCount;
+		functioningRobotsCount = state.functioningRobotsCount;
 		score = state.score;
 		move = state.move;
 
@@ -814,8 +832,6 @@ void State::findFirstClearCell(Coords& clearCellCoords) const {
 //*************************************************************************************************************
 
 void State::simulate(const Coords& clearCellCoords, Cell mark) {
-	++score;
-
 	board.markCell(clearCellCoords, mark);
 
 	simulateRobots();
@@ -831,6 +847,8 @@ void State::simulateRobots() {
 		Robot& robot = robots[robotIdx];
 
 		if (!robot.isDead()) {
+			++score;
+
 			// mark the current cell of the robot
 			board.setRobotTrace(robot.getPosiiton(), makeRobotDirectionFlag(robot.getDirection(), robotIdx));
 
@@ -839,12 +857,14 @@ void State::simulateRobots() {
 
 			if (newRobotCell & Masks::VOID) {
 				robot.destroyRobot();
+				--functioningRobotsCount;
 			}
 			else {
 				robot.rotate(newRobotCell);
 
 				if (board.checkRobotDirection(robot.getPosiiton(), makeRobotDirectionFlag(robot.getDirection(), robotIdx))) {
 					robot.destroyRobot();
+					--functioningRobotsCount;
 				}
 			}
 		}
@@ -894,7 +914,12 @@ Cell State::makeRobotDirectionFlag(RobotDirection robotDirection, int8_t robotId
 //*************************************************************************************************************
 
  void State::convertToMove(const Coords & clearCellCoords, Cell mark, string& res) const {
-	res = EMPTY_STRING;
+	 res = EMPTY_STRING;
+
+	 if (mark & Masks::EMPTY) {
+		return;
+	}
+
 	res += to_string(clearCellCoords.getXCoord());
 	res += SPACE;
 	res += to_string(clearCellCoords.getYCoord());
@@ -1465,21 +1490,30 @@ void GameTree::build() {
 
 void GameTree::createChildren(NodeId parentId, ChildrenList& children) {
 	Node* parent = gameTree.getNode(parentId);
-	int parentDepth = parent->getNodeDepth();
 
 	State* parentState = parent->getState();
 	// Find first clear cell
 	Coords clearCellCoords;
 	parentState->findFirstClearCell(clearCellCoords);
 
-	// Generate all possible states based on the parent state
-	for (Cell mark : POSSIBLE_CELL_MARKS) {
-		if (parentState->isMarkPossible(clearCellCoords, mark)) {
-			// First create the node
-			NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+	if (parentState->getFunctioningRobotsCount() > 0) {
+		if (clearCellCoords.isValid()) {
+			// Generate all possible states based on the parent state
+			for (Cell mark : POSSIBLE_CELL_MARKS) {
+				if (parentState->isMarkPossible(clearCellCoords, mark)) {
+					// First create the node
+					NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
 
+					// Then simulate from the tree directly, to make one less copy
+					gameTree.getNode(childNodeId)->getState()->simulate(clearCellCoords, mark);
+					children.push_back(childNodeId);
+				}
+			}
+		}
+		else {
+			NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
 			// Then simulate from the tree directly, to make one less copy
-			gameTree.getNode(childNodeId)->getState()->simulate(clearCellCoords, mark);
+			gameTree.getNode(childNodeId)->getState()->simulateRobots();
 			children.push_back(childNodeId);
 		}
 	}
@@ -1579,6 +1613,8 @@ void Game::getGameInput() {
 
 	int robotCount;
 	cin >> robotCount; cin.ignore();
+	gameState.setFunctioningRobotsCount(robotCount);
+
 	for (int i = 0; i < robotCount; i++) {
 		int x;
 		int y;
