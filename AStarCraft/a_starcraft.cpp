@@ -63,19 +63,17 @@ enum class RobotDirection : char {
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 
-// First 40 bits are showing each robot movement in that cell
-// Next 6 flags are shwoing the type of the cell (void, arrow)
-typedef unsigned long long Cell;
+typedef uint8_t Cell;
 
 namespace Masks {
-	static const Cell FLAG	= 0b1000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000;
-	static const Cell VOID	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'1000'0000'0000'0000'0000'0000;
-	static const Cell EMPTY	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0100'0000'0000'0000'0000'0000;
-	static const Cell UP	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0010'0000'0000'0000'0000'0000;
-	static const Cell RIGTH	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0001'0000'0000'0000'0000'0000;
-	static const Cell DOWN	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'1000'0000'0000'0000'0000;
-	static const Cell LEFT	= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0100'0000'0000'0000'0000;
-	static const Cell CLEAR = 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0010'0000'0000'0000'0000;
+	static const Cell FLAG	= 0b1000'0000;
+	static const Cell VOID	= 0b0100'0000;
+	static const Cell CLEAR = 0b0010'0000; // 0 may be used instead
+	static const Cell EMPTY	= 0b0001'0000;
+	static const Cell UP	= 0b0000'1000;
+	static const Cell RIGTH	= 0b0000'0100;
+	static const Cell DOWN	= 0b0000'0010;
+	static const Cell LEFT	= 0b0000'0001;
 };
 
 static const Cell DEFAULT_CELL = Masks::CLEAR;
@@ -701,270 +699,13 @@ bool Robot::isDead() const {
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 
-class State {
-public:
-	State();
-	State(const State& state);
-	~State();
-
-	int8_t getRobotsCount() const { return robotsCount; }
-	int8_t getFunctioningRobotsCount() const { return functioningRobotsCount; }
-	int getScore() const { return score; }
-	const string& getString() const { return move; }
-
-	void setRobotsCount(int8_t robotsCount) { this->robotsCount = robotsCount; }
-	void setFunctioningRobotsCount(int8_t functioningRobotsCount) { this->functioningRobotsCount = functioningRobotsCount; }
-	void setScore(int score) { this->score = score; }
-	void setMove(const string& move) { this->move = move; }
-
-	State& operator=(const State& state);
-
-	void addBoardRow(int rowIdx, const string& line);
-
-	void addRobot(
-		int8_t xPos,
-		int8_t yPos,
-		RobotDirection direction
-	);
-
-	void findFirstClearCell(Coords& clearCellCoords) const;
-	void simulate(const Coords& clearCellCoords, Cell mark);
-	void simulateRobots();
-
-	bool isMarkPossible(const Coords& clearCellCoords, Cell mark) const;
-
-	Cell makeRobotDirectionFlag(RobotDirection robotDirection, int8_t robotIdx) const;
-
-	void convertToMove(const Coords& clearCellCoords, Cell mark, string& res) const;
-
-private:
-	Board board;
-	Robot robots[MAX_ROBOTS_COUNT];
-	int8_t robotsCount;
-	int8_t functioningRobotsCount;
-	int score;
-	string move;
-
-	void copyRobots(const State& state);
-};
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-State::State() :
-	board(),
-	robotsCount(0),
-	functioningRobotsCount(0),
-	score(0),
-	move(EMPTY_STRING)
-{
-	// Robots will be automatically created with Robot()
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-State::State(const State& state) :
-	board(state.board),
-	robotsCount(state.robotsCount),
-	functioningRobotsCount(state.functioningRobotsCount),
-	score(state.score),
-	//move(state.move)
-	move(EMPTY_STRING)
-{
-	copyRobots(state);
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-State::~State() {
-
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-State& State::operator=(const State& state) {
-	if (this != &state) {
-		board = state.board;
-		robotsCount = state.robotsCount;
-		functioningRobotsCount = state.functioningRobotsCount;
-		score = state.score;
-		//move = state.move;
-		move = EMPTY_STRING;
-
-		copyRobots(state);
-	}
-	
-	return *this;
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-void State::addBoardRow(int rowIdx, const string& line) {
-	board.addRow(rowIdx, line);
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-void State::addRobot(
-	int8_t xPos,
-	int8_t yPos,
-	RobotDirection direction
-) {
-	robots[robotsCount].setPosition(Coords(xPos, yPos));
-	robots[robotsCount].setDirection(direction);
-
-	++robotsCount;
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-void State::findFirstClearCell(Coords& clearCellCoords) const {
-	board.findFirstClearCell(clearCellCoords);
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-void State::simulate(const Coords& clearCellCoords, Cell mark) {
-	board.markCell(clearCellCoords, mark);
-
-	simulateRobots();
-
-	convertToMove(clearCellCoords, mark, move);
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-void State::simulateRobots() {
-	for (int8_t robotIdx = 0; robotIdx < robotsCount; ++robotIdx) {
-		Robot& robot = robots[robotIdx];
-
-		if (!robot.isDead()) {
-			++score;
-
-			robot.rotate(board.getCell(robot.getPosiiton()));
-
-			// mark the current cell of the robot
-			board.setRobotTrace(robot.getPosiiton(), makeRobotDirectionFlag(robot.getDirection(), robotIdx));
-
-			robot.move();
-			Cell newRobotCell = board.getCell(robot.getPosiiton());
-
-			if (newRobotCell & Masks::VOID) {
-				robot.destroyRobot();
-				--functioningRobotsCount;
-			}
-			else {
-				robot.rotate(newRobotCell);
-
-				if (board.checkRobotDirection(robot.getPosiiton(), makeRobotDirectionFlag(robot.getDirection(), robotIdx))) {
-					robot.destroyRobot();
-					--functioningRobotsCount;
-				}
-			}
-		}
-	}
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-bool State::isMarkPossible(const Coords& clearCellCoords, Cell mark) const {
-	return board.isMarkPossible(clearCellCoords, mark);
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-Cell State::makeRobotDirectionFlag(RobotDirection robotDirection, int8_t robotIdx) const {
-	Cell flag = Masks::FLAG;
-	flag >>= robotIdx * ROBOT_DIRECTION;
-
-	switch (robotDirection) {
-		case RobotDirection::UP: {
-			flag >>= 0;
-			break;
-		}
-		case RobotDirection::RIGHT: {
-			flag >>= 1;
-			break;
-		}
-		case RobotDirection::DOWN: {
-			flag >>= 2;
-			break;
-		}
-		case RobotDirection::LEFT: {
-			flag >>= 3;
-			break;
-		}
-		default: {
-			break;
-		}
-	}
-
-	return flag;
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
- void State::convertToMove(const Coords & clearCellCoords, Cell mark, string& res) const {
-	 res = EMPTY_STRING;
-
-	 if (mark & Masks::EMPTY) {
-		return;
-	}
-
-	res += to_string(clearCellCoords.getXCoord());
-	res += SPACE;
-	res += to_string(clearCellCoords.getYCoord());
-	res += SPACE;
-
-	if (mark & Masks::UP) {
-		res += static_cast<char>(CellType::UP_ARROW);
-	}
-
-	if (mark & Masks::RIGTH) {
-		res += static_cast<char>(CellType::RIGHT_ARROW);
-	}
-
-	if (mark & Masks::DOWN) {
-		res += static_cast<char>(CellType::DOWN_ARROW);
-	}
-
-	if (mark & Masks::LEFT) {
-		res += static_cast<char>(CellType::LEFT_ARROW);
-	}
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-void State::copyRobots(const State& state) {
-	for (int8_t robotIdx = 0; robotIdx < state.getRobotsCount(); ++robotIdx) {
-		robots[robotIdx] = state.robots[robotIdx];
-	}
-}
-
-//-------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------
-
 typedef int NodeId;
 const NodeId INVALID_NODE_ID = -1;
 
 class Node {
 public:
 	Node();
-	Node(NodeId id, NodeId parentId, const State& state);
+	Node(NodeId id, NodeId parentId, const Board& state);
 	~Node();
 
 	NodeId getId() const {
@@ -975,19 +716,19 @@ public:
 		return parentId;
 	}
 
-	State* getState() {
-		return &state;
+	Board& getBoardState() {
+		return boardState;
 	}
 
 	void setId(NodeId id) { this->id = id; }
 	void setParentId(NodeId parentId) { this->parentId = parentId; }
-	void setState(const State& state) { this->state = state; }
+	void setBoardState(const Board& boardState) { this->boardState = boardState; }
 
 private:
 	NodeId id;
-	NodeId parentId;
+	NodeId parentId; // Could be removed after debugging is good
 
-	State state;
+	Board boardState;
 };
 
 //*************************************************************************************************************
@@ -996,7 +737,7 @@ private:
 Node::Node() :
 	id(INVALID_NODE_ID),
 	parentId(INVALID_NODE_ID),
-	state()
+	boardState()
 {
 
 }
@@ -1004,10 +745,10 @@ Node::Node() :
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-Node::Node(NodeId id, NodeId parentId, const State& state) :
+Node::Node(NodeId id, NodeId parentId, const Board& boardState) :
 	id(id),
 	parentId(parentId),
-	state(state)
+	boardState(boardState)
 {
 
 }
@@ -1062,7 +803,7 @@ public:
 
 	NodeId createNode(
 		NodeId parentId,
-		const State& gameState
+		const Board& boardState
 	);
 
 	void clear();
@@ -1205,7 +946,7 @@ void Graph::addEdge(NodeId parentId, NodeId childId) {
 
 NodeId Graph::createNode(
 	NodeId parentId,
-	const State& gameState
+	const Board& boardState
 ) {
 	NodeId nodeId = nodesCount;
 
@@ -1215,7 +956,7 @@ NodeId Graph::createNode(
 		//	nodeDepth = 1 + idNodeMap[parentId]->getNodeDepth();
 		//}
 
-		Node* node = new Node(nodeId, parentId, gameState);
+		Node* node = new Node(nodeId, parentId, boardState);
 		idNodeMap[nodeId] = node;
 		graph[nodeId];
 
@@ -1254,10 +995,10 @@ public:
 
 	~GameTree();
 
-	State getTurnState() const { return turnState; }
+	const Board& getTurnBoard() const { return turnBoard; }
 	const string& getBestMoves() const { return bestMoves; }
 
-	void setTurnState(const State& turnState) { this->turnState = turnState; }
+	void setTurnBoard(const Board& turnState) { this->turnBoard = turnBoard; }
 
 	void build();
 	void createChildren(NodeId parentId, ChildrenList& children);
@@ -1265,7 +1006,7 @@ public:
 	void gatherMosves();
 
 private:
-	State turnState;
+	Board turnBoard;
 	NodeId bestChild;
 	int bestScore;
 	string bestMoves;
@@ -1277,7 +1018,7 @@ private:
 //*************************************************************************************************************
 
 GameTree::GameTree() :
-	turnState(),
+	turnBoard(),
 	bestChild(INVALID_NODE_ID),
 	bestScore(0),
 	bestMoves(EMPTY_STRING),
@@ -1297,20 +1038,18 @@ GameTree::~GameTree() {
 //*************************************************************************************************************
 
 void GameTree::build() {
-	const NodeId rootId = gameTree.createNode(INVALID_NODE_ID, turnState);
+	const NodeId rootId = gameTree.createNode(INVALID_NODE_ID, turnBoard);
 
-	// Sorted list for the nodes to explore
-	// ENDING with the highest score state
-	NodesList nodesForntier;
+	NodeQueue nodesForntier;
 	nodesForntier.push_back(rootId);
 
 	while (!nodesForntier.empty()) {
-		const NodeId parentId = nodesForntier.back();
-		nodesForntier.pop_back();
+		const NodeId parentId = nodesForntier.front();
+		nodesForntier.pop_front();
 
 		ChildrenList children;
 		createChildren(parentId, children);
-		// eventually sort children
+
 	 	for (size_t childIdx = 0; childIdx < children.size(); ++childIdx) {
 			nodesForntier.push_back(children[childIdx]);
 		}
@@ -1323,35 +1062,23 @@ void GameTree::build() {
 void GameTree::createChildren(NodeId parentId, ChildrenList& children) {
 	Node* parent = gameTree.getNode(parentId);
 
-	State* parentState = parent->getState();
+	const Board& parentBoardState = parent->getBoardState();
 	// Find first clear cell
 	Coords clearCellCoords;
-	parentState->findFirstClearCell(clearCellCoords);
+	parentBoardState.findFirstClearCell(clearCellCoords);
 
-	if (parentState->getFunctioningRobotsCount() > 0) {
-		if (clearCellCoords.isValid()) {
-			// Generate all possible states based on the parent state
-			for (Cell mark : POSSIBLE_CELL_MARKS) {
-				if (parentState->isMarkPossible(clearCellCoords, mark)) {
-					// First create the node
-					NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
-
-					// Then simulate from the tree directly, to make one less copy
-					State* state = gameTree.getNode(childNodeId)->getState();
-					state->simulate(clearCellCoords, mark);
-					updateBestChild(childNodeId, state->getScore());
-					children.push_back(childNodeId);
-				}
+	if (clearCellCoords.isValid()) {
+		for (Cell mark : POSSIBLE_CELL_MARKS) {
+			if (parentBoardState.isMarkPossible(clearCellCoords, mark)) {
+				NodeId childNodeId = gameTree.createNode(parent->getId(), parentBoardState);
+				gameTree.getNode(childNodeId)->getBoardState().markCell(clearCellCoords, mark);
+				children.push_back(childNodeId);
 			}
 		}
-		else {
-			NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
-			// Then simulate from the tree directly, to make one less copy
-			State* state = gameTree.getNode(childNodeId)->getState();
-			state->simulateRobots();
-			updateBestChild(childNodeId, state->getScore());
-			children.push_back(childNodeId);
-		}
+	}
+	else {
+		// Board full
+		// Proceed with simulating all robots at once
 	}
 }
 
@@ -1369,16 +1096,7 @@ void GameTree::updateBestChild(NodeId childNodeId, int score) {
 //*************************************************************************************************************
 
 void GameTree::gatherMosves() {
-	vector<NodeId> nodePath = gameTree.backtrack(bestChild, 0);
-
-	for (NodeId nodeId : nodePath) {
-		const string& move = gameTree.getNode(nodeId)->getState()->getString();
-
-		if (EMPTY_STRING != move) {
-			bestMoves += move;
-			bestMoves += SPACE;
-		}
-	}
+	// Traverse the best board to get move
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -1407,7 +1125,7 @@ public:
 private:
 	int turnsCount;
 
-	State gameState;
+	Board gameBoard;
 	GameTree gameTree;
 };
 
@@ -1416,7 +1134,7 @@ private:
 
 Game::Game() :
 	turnsCount(0),
-	gameState(),
+	gameBoard(),
 	gameTree()
 {
 
@@ -1470,12 +1188,12 @@ void Game::getGameInput() {
 		string line;
 		cin >> line; cin.ignore();
 
-		gameState.addBoardRow(rowIdx, line);
+		gameBoard.addRow(rowIdx, line);
 	}
 
 	int robotCount;
 	cin >> robotCount; cin.ignore();
-	gameState.setFunctioningRobotsCount(robotCount);
+	//gameState.setFunctioningRobotsCount(robotCount);
 
 	for (int i = 0; i < robotCount; i++) {
 		int x;
@@ -1483,11 +1201,11 @@ void Game::getGameInput() {
 		string direction;
 		cin >> x >> y >> direction; cin.ignore();
 
-		gameState.addRobot(
-			static_cast<int8_t>(x),
-			static_cast<int8_t>(y),
-			static_cast<RobotDirection>(direction[0])
-		);
+		//gameState.addRobot(
+		//	static_cast<int8_t>(x),
+		//	static_cast<int8_t>(y),
+		//	static_cast<RobotDirection>(direction[0])
+		//);
 	}
 }
 
@@ -1507,7 +1225,7 @@ void Game::turnBegin() {
 //*************************************************************************************************************
 
 void Game::makeTurn() {
-	gameTree.setTurnState(gameState);
+	gameTree.setTurnBoard(gameBoard);
 	gameTree.build();
 	gameTree.gatherMosves();
 	cout << gameTree.getBestMoves() << endl;
