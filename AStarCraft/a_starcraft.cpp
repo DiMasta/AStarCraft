@@ -771,7 +771,8 @@ State::State(const State& state) :
 	robotsCount(state.robotsCount),
 	functioningRobotsCount(state.functioningRobotsCount),
 	score(state.score),
-	move(state.move)
+	//move(state.move)
+	move(EMPTY_STRING)
 {
 	copyRobots(state);
 }
@@ -792,7 +793,8 @@ State& State::operator=(const State& state) {
 		robotsCount = state.robotsCount;
 		functioningRobotsCount = state.functioningRobotsCount;
 		score = state.score;
-		move = state.move;
+		//move = state.move;
+		move = EMPTY_STRING;
 
 		copyRobots(state);
 	}
@@ -848,6 +850,8 @@ void State::simulateRobots() {
 
 		if (!robot.isDead()) {
 			++score;
+
+			robot.rotate(board.getCell(robot.getPosiiton()));
 
 			// mark the current cell of the robot
 			board.setRobotTrace(robot.getPosiiton(), makeRobotDirectionFlag(robot.getDirection(), robotIdx));
@@ -1432,14 +1436,20 @@ public:
 	~GameTree();
 
 	State getTurnState() const { return turnState; }
+	const string& getBestMoves() const { return bestMoves; }
 
 	void setTurnState(const State& turnState) { this->turnState = turnState; }
 
 	void build();
 	void createChildren(NodeId parentId, ChildrenList& children);
+	void updateBestChild(NodeId childNodeId, int score);
+	void gatherMosves();
 
 private:
 	State turnState;
+	NodeId bestChild;
+	int bestScore;
+	string bestMoves;
 
 	Graph gameTree;
 };
@@ -1449,6 +1459,9 @@ private:
 
 GameTree::GameTree() :
 	turnState(),
+	bestChild(INVALID_NODE_ID),
+	bestScore(0),
+	bestMoves(EMPTY_STRING),
 	gameTree()
 {
 
@@ -1505,7 +1518,9 @@ void GameTree::createChildren(NodeId parentId, ChildrenList& children) {
 					NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
 
 					// Then simulate from the tree directly, to make one less copy
-					gameTree.getNode(childNodeId)->getState()->simulate(clearCellCoords, mark);
+					State* state = gameTree.getNode(childNodeId)->getState();
+					state->simulate(clearCellCoords, mark);
+					updateBestChild(childNodeId, state->getScore());
 					children.push_back(childNodeId);
 				}
 			}
@@ -1513,8 +1528,36 @@ void GameTree::createChildren(NodeId parentId, ChildrenList& children) {
 		else {
 			NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
 			// Then simulate from the tree directly, to make one less copy
-			gameTree.getNode(childNodeId)->getState()->simulateRobots();
+			State* state = gameTree.getNode(childNodeId)->getState();
+			state->simulateRobots();
+			updateBestChild(childNodeId, state->getScore());
 			children.push_back(childNodeId);
+		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameTree::updateBestChild(NodeId childNodeId, int score) {
+	if (score > bestScore) {
+		bestScore = score;
+		bestChild = childNodeId;
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameTree::gatherMosves() {
+	vector<NodeId> nodePath = gameTree.backtrack(bestChild, 0);
+
+	for (NodeId nodeId : nodePath) {
+		const string& move = gameTree.getNode(nodeId)->getState()->getString();
+
+		if (EMPTY_STRING != move) {
+			bestMoves += move;
+			bestMoves += SPACE;
 		}
 	}
 }
@@ -1647,10 +1690,11 @@ void Game::turnBegin() {
 void Game::makeTurn() {
 	gameTree.setTurnState(gameState);
 	gameTree.build();
+	gameTree.gatherMosves();
 
 	//cout << "0 0 U 1 1 R 2 2 D 3 3 L" << endl;
 	//cout << "3 4 R 4 4 R 5 4 L" << endl;
-	cout << "0 0 U" << endl;
+	cout << gameTree.getBestMoves() << endl;
 }
 
 //*************************************************************************************************************
