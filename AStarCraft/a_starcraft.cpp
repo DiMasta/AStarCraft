@@ -346,6 +346,7 @@ public:
 	void addRow(int rowIdx, const string& line);
 	void findFirstClearCell(Coords& firstClearCell) const;
 	void markCell(const Coords& clearCellCoords, Cell mark);
+	
 	void setRobotTrace(
 		const Coords& position,
 		Cell robotDirectionFlag
@@ -574,9 +575,11 @@ public:
 
 	const Coords& getPosiiton() const { return position; }
 	RobotDirection getDirection() const { return direction; }
+	bool getFirstTurn() const { return firstTurn; }
 
 	void setPosition(const Coords& position) { this->position = position; }
 	void setDirection(RobotDirection direction) { this->direction = direction; }
+	void setFirstTurn(bool firstTurn) { this->firstTurn = firstTurn; }
 
 	void move();
 	void rotate(Cell cell);
@@ -587,6 +590,7 @@ public:
 private:
 	Coords position;
 	RobotDirection direction;
+	bool firstTurn; // Not sure if to use this or to rotate twice
 };
 
 //*************************************************************************************************************
@@ -594,7 +598,8 @@ private:
 
 Robot::Robot() :
 	position(),
-	direction(RobotDirection::INVALID)
+	direction(RobotDirection::INVALID),
+	firstTurn(true)
 {
 
 }
@@ -603,7 +608,8 @@ Robot::Robot() :
 
 Robot::Robot(const Robot& robot) :
 	position(robot.position),
-	direction(robot.direction)
+	direction(robot.direction),
+	firstTurn(robot.firstTurn)
 {
 }
 
@@ -621,6 +627,7 @@ Robot& Robot::operator=(const Robot& robot) {
 	if (this != &robot) {
 		position = robot.position;
 		direction = robot.direction;
+		firstTurn = robot.firstTurn;
 	}
 
 	return *this;
@@ -692,6 +699,89 @@ void Robot::destroyRobot() {
 
 bool Robot::isDead() const {
 	return !position.isValid();
+}
+
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+
+typedef unsigned long long VisitedFlags;
+
+class State {
+public:
+	State();
+
+	void resetFlags();
+
+	int simulate(const Board& boardState);
+private:
+	VisitedFlags visitedFlags[BOARD_HEIGHT][BOARD_WIDTH];
+	Robot robots[MAX_ROBOTS_COUNT];
+	int8_t robotsCount;
+	int8_t functioningRobotsCount;
+
+};
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+State::State() :
+	robotsCount(0),
+	functioningRobotsCount(0)
+{
+	resetFlags();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void State::resetFlags() {
+	for (int8_t rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
+		for (int8_t colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
+			visitedFlags[rowIdx][colIdx] = 0;
+		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+int State::simulate(const Board& boardState) {
+	int score = 0;
+
+	while (functioningRobotsCount > 0) {
+		for (int robotIdx = 0; robotIdx < robotsCount; ++robotIdx) {
+			Robot& robot = robots[robotIdx];
+
+			if (!robot.isDead()) {
+				++score;
+
+				if (robot.getFirstTurn()) {
+					robot.rotate(boardState.getCell(robot.getPosiiton()));
+					robot.setFirstTurn(false);
+				}
+
+				// Mark current robot move
+				
+				robot.move();
+
+				if (boardState.getCell(robot.getPosiiton()) & Masks::VOID) {
+					robot.destroyRobot();
+					--functioningRobotsCount;
+				}
+				else {
+					robot.rotate(boardState.getCell(robot.getPosiiton()));
+
+					// Robot was here in this direction, destroy it
+					if () {
+						robot.destroyRobot();
+						--functioningRobotsCount;
+					}
+				}
+			}
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -998,7 +1088,7 @@ public:
 	const Board& getTurnBoard() const { return turnBoard; }
 	const string& getBestMoves() const { return bestMoves; }
 
-	void setTurnBoard(const Board& turnState) { this->turnBoard = turnBoard; }
+	void setTurnBoard(const Board& turnBoard) { this->turnBoard = turnBoard; }
 
 	void build();
 	void createChildren(NodeId parentId, ChildrenList& children);
@@ -1050,6 +1140,7 @@ void GameTree::build() {
 		ChildrenList children;
 		createChildren(parentId, children);
 
+		// This for loop could be jumped over if no reordering of children will happen
 	 	for (size_t childIdx = 0; childIdx < children.size(); ++childIdx) {
 			nodesForntier.push_back(children[childIdx]);
 		}
