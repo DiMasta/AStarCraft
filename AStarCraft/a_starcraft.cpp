@@ -120,8 +120,6 @@ public:
 	Coords& operator-=(const Coords& other);
 	Coords operator*(const Coords& other);
 	Coords& operator*=(const Coords& other);
-	Coords operator*(Coord numerical);
-	Coords& operator*=(Coord numerical);
 
 	bool isValid() const;
 	void debug() const;
@@ -966,31 +964,15 @@ const NodeId INVALID_NODE_ID = -1;
 class Node {
 public:
 	Node();
-	Node(NodeId id, int nodeDepth, NodeId parentId, const State& state, bool rootNote, bool explored, bool inFrontier);
+	Node(NodeId id, NodeId parentId, const State& state);
 	~Node();
 
 	NodeId getId() const {
 		return id;
 	}
 
-	int getNodeDepth() const {
-		return nodeDepth;
-	}
-
 	NodeId getParentId() const {
 		return parentId;
-	}
-
-	bool getRootNode() const {
-		return rootNote;
-	}
-
-	bool getExplored() const {
-		return explored;
-	}
-
-	bool getInFrontier() const {
-		return inFrontier;
 	}
 
 	State* getState() {
@@ -998,20 +980,12 @@ public:
 	}
 
 	void setId(NodeId id) { this->id = id; }
-	void setNodeDepth(int nodeDepth) { this->nodeDepth = nodeDepth; }
 	void setParentId(NodeId parentId) { this->parentId = parentId; }
-	void setRootNode(bool rootNote) { this->rootNote = rootNote; }
-	void setExplored(bool explored) { this->explored = explored; }
-	void setInFrontier(bool inFrontier) { this->inFrontier = inFrontier; }
 	void setState(const State& state) { this->state = state; }
 
 private:
 	NodeId id;
-	int nodeDepth;
 	NodeId parentId;
-	bool rootNote;
-	bool explored;
-	bool inFrontier;
 
 	State state;
 };
@@ -1021,12 +995,8 @@ private:
 
 Node::Node() :
 	id(INVALID_NODE_ID),
-	nodeDepth(INVALID_NODE_DEPTH),
 	parentId(INVALID_NODE_ID),
-	state(),
-	rootNote(false),
-	explored(false),
-	inFrontier(false)
+	state()
 {
 
 }
@@ -1034,14 +1004,10 @@ Node::Node() :
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-Node::Node(NodeId id, int nodeDepth, NodeId parentId, const State& state, bool rootNote, bool explored, bool inFrontier) :
+Node::Node(NodeId id, NodeId parentId, const State& state) :
 	id(id),
-	nodeDepth(nodeDepth),
 	parentId(parentId),
-	state(state),
-	rootNote(rootNote),
-	explored(explored),
-	inFrontier(inFrontier)
+	state(state)
 {
 
 }
@@ -1103,15 +1069,9 @@ public:
 	bool nodeCreated(NodeId nodeId) const;
 	void deleteAllNodes();
 	vector<NodeId> treeRootsIds() const;
-	void dfs(NodeId treeRootNodeId);
-	void bfs(NodeId treeRootNodeId);
-	int getMaxNodeDepth() const;
 	bool edgeExists(NodeId parent, NodeId child) const;
 	vector<NodeId> backtrack(NodeId from, NodeId to) const;
 	NodeId getFirstNodeId() const;
-	int depthOfTree(NodeId nodeId) const;
-	int treeDiameter(NodeId nodeId) const;
-	void graphResetAlgParams();
 
 private:
 	int nodesCount;
@@ -1197,92 +1157,6 @@ vector<NodeId> Graph::treeRootsIds() const {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Graph::dfs(NodeId treeRootNodeId) {
-	getNode(treeRootNodeId)->setNodeDepth(TREE_ROOT_NODE_DEPTH);
-
-	NodeStack frontier;
-
-	frontier.push_back(treeRootNodeId);
-	idNodeMap[treeRootNodeId]->setInFrontier(true);
-
-	while (!frontier.empty()) {
-		NodeId state = frontier.back();
-		frontier.pop_back();
-		idNodeMap[treeRootNodeId]->setInFrontier(false);
-
-		idNodeMap[state]->setExplored(true);
-
-		ChildrenList* children = &graph[state];
-		for (size_t childIdx = 0; childIdx < children->size(); ++childIdx) {
-			NodeId childId = children->at(childIdx);
-
-			bool nodeExplored = idNodeMap[childId]->getExplored();
-			bool nodeInFrontier = idNodeMap[childId]->getInFrontier();
-			if (!nodeExplored && !nodeInFrontier) {
-				frontier.push_back(childId);
-
-				int parentDepth = idNodeMap[state]->getNodeDepth();
-				idNodeMap[childId]->setNodeDepth(parentDepth + 1);
-				idNodeMap[childId]->setParentId(state);
-			}
-		}
-	}
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-void Graph::bfs(NodeId treeRootNodeId) {
-	getNode(treeRootNodeId)->setNodeDepth(TREE_ROOT_NODE_DEPTH);
-
-	NodeQueue frontier;
-
-	frontier.push_back(treeRootNodeId);
-	idNodeMap[treeRootNodeId]->setInFrontier(true);
-
-	while (!frontier.empty()) {
-		NodeId state = frontier.front();
-		frontier.pop_front();
-		idNodeMap[treeRootNodeId]->setInFrontier(false);
-
-		idNodeMap[state]->setExplored(true);
-
-		ChildrenList* children = &graph[state];
-		for (size_t childIdx = 0; childIdx < children->size(); ++childIdx) {
-			NodeId childId = children->at(childIdx);
-
-			bool nodeExplored = idNodeMap[childId]->getExplored();
-			bool nodeInFrontier = idNodeMap[childId]->getInFrontier();
-			if (!nodeExplored && !nodeInFrontier) {
-				frontier.push_back(childId);
-
-				int parentDepth = idNodeMap[state]->getNodeDepth();
-				idNodeMap[childId]->setNodeDepth(parentDepth + 1);
-				idNodeMap[childId]->setParentId(state);
-			}
-		}
-	}
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-int Graph::getMaxNodeDepth() const {
-	int maxNodeDepth = INVALID_NODE_DEPTH;
-
-	for (IdNodeMap::const_iterator nodeIt = idNodeMap.begin(); nodeIt != idNodeMap.end(); ++nodeIt) {
-		int nodeDepth = nodeIt->second->getNodeDepth();
-		if (nodeDepth > maxNodeDepth) {
-			maxNodeDepth = nodeDepth;
-		}
-	}
-
-	return maxNodeDepth;
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
 bool Graph::edgeExists(NodeId parent, NodeId child) const {
 	bool res = false;
 
@@ -1322,61 +1196,6 @@ NodeId Graph::getFirstNodeId() const {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-int Graph::depthOfTree(NodeId nodeId) const {
-	if (idNodeMap.at(nodeId)->getRootNode()) {
-		return 0;
-	}
-
-	int maxdepth = 0;
-
-	for (ChildrenList::const_iterator nodeIt = graph.at(nodeId).begin(); nodeIt != graph.at(nodeId).end(); ++nodeIt) {
-		maxdepth = max(maxdepth, depthOfTree(*nodeIt));
-	}
-
-	return maxdepth + 1;
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-int Graph::treeDiameter(NodeId nodeId) const {
-	if (idNodeMap.at(nodeId)->getRootNode()) {
-		return 0;
-	}
-
-	int max1 = 0, max2 = 0;
-	for (ChildrenList::const_iterator nodeIt = graph.at(nodeId).begin(); nodeIt != graph.at(nodeId).end(); ++nodeIt) {
-		int h = depthOfTree(*nodeIt);
-		if (h > max1) {
-			max2 = max1;
-			max1 = h;
-		}
-		else if (h > max2) {
-			max2 = h;
-		}
-	}
-
-	int maxChildDia = 0;
-	for (ChildrenList::const_iterator nodeIt = graph.at(nodeId).begin(); nodeIt != graph.at(nodeId).end(); ++nodeIt) {
-		maxChildDia = max(maxChildDia, treeDiameter(*nodeIt));
-	}
-
-	return max(maxChildDia, max1 + max2 + 1);
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-void Graph::graphResetAlgParams() {
-	for (IdNodeMap::iterator nodeIt = idNodeMap.begin(); nodeIt != idNodeMap.end(); ++nodeIt) {
-		nodeIt->second->setExplored(false);
-		nodeIt->second->setInFrontier(false);
-	}
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
 void Graph::addEdge(NodeId parentId, NodeId childId) {
 	graph[parentId].push_back(childId);
 }
@@ -1392,11 +1211,11 @@ NodeId Graph::createNode(
 
 	if (!nodeCreated(nodeId)) {
 		int nodeDepth = 0;
-		if (parentId != INVALID_NODE_ID) {
-			nodeDepth = 1 + idNodeMap[parentId]->getNodeDepth();
-		}
+		//if (parentId != INVALID_NODE_ID) {
+		//	nodeDepth = 1 + idNodeMap[parentId]->getNodeDepth();
+		//}
 
-		Node* node = new Node(nodeId, nodeDepth, parentId, gameState, false, false, false);
+		Node* node = new Node(nodeId, parentId, gameState);
 		idNodeMap[nodeId] = node;
 		graph[nodeId];
 
@@ -1691,10 +1510,10 @@ void Game::makeTurn() {
 	gameTree.setTurnState(gameState);
 	gameTree.build();
 	gameTree.gatherMosves();
+	cout << gameTree.getBestMoves() << endl;
 
 	//cout << "0 0 U 1 1 R 2 2 D 3 3 L" << endl;
-	//cout << "3 4 R 4 4 R 5 4 L" << endl;
-	cout << gameTree.getBestMoves() << endl;
+	//cout << "14 2 L 3 7 R 4 7 L 5 7 L 6 7 L 7 7 L 8 7 L 9 7 L 10 7 L 11 7 L 12 7 L" << endl;
 }
 
 //*************************************************************************************************************
