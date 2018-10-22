@@ -479,8 +479,8 @@ void Board::findFirstClearCell(Coords& firstClearCell) const {
 
 void Board::markCell(const Coords& clearCellCoords, Cell mark) {
 	Cell& cell = gameBoard[clearCellCoords.getYCoord()][clearCellCoords.getXCoord()];
+	cell &= Masks::VOID; // Clear all flags except the VOID one
 	cell |= mark;
-	cell &= ~Masks::CLEAR;
 }
 
 //*************************************************************************************************************
@@ -539,7 +539,12 @@ void Board::getMoves(string& moves) const {
 		for (int8_t colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
 			Cell cell = gameBoard[rowIdx][colIdx];
 
-			if (!(cell & Masks::EMPTY)) {
+			if (!(cell & Masks::EMPTY) && !(cell & Masks::VOID)) {
+				moves += to_string(colIdx);
+				moves += SPACE;
+				moves += to_string(rowIdx);
+				moves += SPACE;
+
 				if (cell & Masks::UP) {
 					moves += static_cast<char>(RobotDirection::UP);
 				}
@@ -709,7 +714,7 @@ bool Robot::isDead() const {
 //-------------------------------------------------------------------------------------------------------------
 
 typedef unsigned long long VisitedFlags;
-static const VisitedFlags DEFAULT_FLAG = 0b1000'0000;
+static const VisitedFlags DEFAULT_FLAG = 0b1000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000;
 
 class State {
 public:
@@ -809,14 +814,16 @@ void State::copySate(const State& state) {
 			visitedFlags[rowIdx][colIdx] = state.visitedFlags[rowIdx][colIdx];
 		}
 	}
-	
-	for (int8_t robotIdx = 0; robotIdx < robotsCount; ++robotIdx) {
+
+	robotsCount = state.robotsCount;
+	functioningRobotsCount = state.functioningRobotsCount;
+
+	for (int8_t robotIdx = 0; robotIdx < state.robotsCount; ++robotIdx) {
 		robots[robotIdx] = state.robots[robotIdx];
 		initialRobots[robotIdx] = state.initialRobots[robotIdx];
 	}
 
-	robotsCount = state.robotsCount;
-	functioningRobotsCount = state.functioningRobotsCount;
+
 }
 
 //*************************************************************************************************************
@@ -1484,7 +1491,7 @@ void Game::makeTurn() {
 	cout << gameTree.getBestMoves() << endl;
 
 	//cout << "0 0 U 1 1 R 2 2 D 3 3 L" << endl;
-	//cout << "14 2 L 3 7 R 4 7 L 5 7 L 6 7 L 7 7 L 8 7 L 9 7 L 10 7 L 11 7 L 12 7 L" << endl;
+	//cout << "9 3 R 10 3 D 8 4 R 8 5 U 10 5 L" << endl;
 }
 
 //*************************************************************************************************************
