@@ -346,20 +346,9 @@ public:
 	void addRow(int rowIdx, const string& line);
 	void findFirstClearCell(Coords& firstClearCell) const;
 	void markCell(const Coords& clearCellCoords, Cell mark);
+	void getMoves(string& moves) const;
 	
-	void setRobotTrace(
-		const Coords& position,
-		Cell robotDirectionFlag
-	);
-
-
 	bool isMarkPossible(const Coords& clearCellCoords, Cell mark) const;
-
-	/// Returns true if the robot already was there in the same postion
-	bool checkRobotDirection(
-		const Coords& position,
-		Cell robotDirectionFlag
-	) const;
 
 	Cell getCell(const Coords& coords) const;
 
@@ -497,16 +486,6 @@ void Board::markCell(const Coords& clearCellCoords, Cell mark) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Board::setRobotTrace(
-	const Coords& position,
-	Cell robotDirectionFlag
-){
-	gameBoard[position.getYCoord()][position.getXCoord()] |= robotDirectionFlag;
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
 bool Board::isMarkPossible(const Coords& clearCellCoords, Cell mark) const {
 	// If staying empty, won't go to VOID
 	if (Masks::EMPTY == mark) {
@@ -546,18 +525,41 @@ bool Board::isMarkPossible(const Coords& clearCellCoords, Cell mark) const {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-bool Board::checkRobotDirection(
-	const Coords& position,
-	Cell robotDirectionFlag
-) const {
-	return gameBoard[position.getYCoord()][position.getXCoord()] & robotDirectionFlag;
+Cell Board::getCell(const Coords& coords) const {
+	return gameBoard[coords.getYCoord()][coords.getXCoord()];
 }
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-Cell Board::getCell(const Coords& coords) const {
-	return gameBoard[coords.getYCoord()][coords.getXCoord()];
+void Board::getMoves(string& moves) const {
+	moves = EMPTY_STRING;
+
+	for (int8_t rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
+		for (int8_t colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
+			Cell cell = gameBoard[rowIdx][colIdx];
+
+			if (!(cell & Masks::EMPTY)) {
+				if (cell & Masks::UP) {
+					moves += static_cast<char>(RobotDirection::UP);
+				}
+
+				if (cell & Masks::LEFT) {
+					moves += static_cast<char>(RobotDirection::LEFT);
+				}
+
+				if (cell & Masks::DOWN) {
+					moves += static_cast<char>(RobotDirection::DOWN);
+				}
+
+				if (cell & Masks::RIGTH) {
+					moves += static_cast<char>(RobotDirection::RIGHT);
+				}
+
+				moves += SPACE;
+			}
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -707,16 +709,46 @@ bool Robot::isDead() const {
 //-------------------------------------------------------------------------------------------------------------
 
 typedef unsigned long long VisitedFlags;
+static const VisitedFlags DEFAULT_FLAG = 0b1000'0000;
 
 class State {
 public:
 	State();
 
-	void resetFlags();
+	State(const State& state);
+
+	State& operator=(const State& state);
+
+	void reset();
+	void copySate(const State& state);
+
+	void setRobotTrace(
+		const Coords& position,
+		VisitedFlags robotDirectionFlag
+	);
+
+	void addRobotsCount(int8_t robotsCount);
+
+	void addRobot(
+		int8_t idx,
+		int8_t x,
+		int8_t y,
+		RobotDirection direction
+	);
+
+	bool checkRobotDirection(
+		const Coords& position,
+		VisitedFlags robotDirectionFlag
+	);
 
 	int simulate(const Board& boardState);
+
+	VisitedFlags makeRobotVisitedFlag(int8_t robotIdx, RobotDirection robotDirection);
+	VisitedFlags& getVisitedFlags(const Coords& coords);
+	 
 private:
 	VisitedFlags visitedFlags[BOARD_HEIGHT][BOARD_WIDTH];
+	Robot initialRobots[MAX_ROBOTS_COUNT];
 	Robot robots[MAX_ROBOTS_COUNT];
 	int8_t robotsCount;
 	int8_t functioningRobotsCount;
@@ -730,18 +762,96 @@ State::State() :
 	robotsCount(0),
 	functioningRobotsCount(0)
 {
-	resetFlags();
+	reset();
 }
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void State::resetFlags() {
+State::State(const State& state) {
+	copySate(state);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+State& State::operator=(const State& state) {
+	if (this != &state) {
+		copySate(state);
+	}
+
+	return *this;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void State::reset() {
 	for (int8_t rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
 		for (int8_t colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
 			visitedFlags[rowIdx][colIdx] = 0;
 		}
 	}
+
+	for (int8_t robotIdx = 0; robotIdx < robotsCount; ++robotIdx) {
+		robots[robotIdx] = initialRobots[robotIdx];
+	}
+
+	functioningRobotsCount = robotsCount;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void State::copySate(const State& state) {
+	for (int8_t rowIdx = 0; rowIdx < BOARD_HEIGHT; ++rowIdx) {
+		for (int8_t colIdx = 0; colIdx < BOARD_WIDTH; ++colIdx) {
+			visitedFlags[rowIdx][colIdx] = state.visitedFlags[rowIdx][colIdx];
+		}
+	}
+	
+	for (int8_t robotIdx = 0; robotIdx < robotsCount; ++robotIdx) {
+		robots[robotIdx] = state.robots[robotIdx];
+		initialRobots[robotIdx] = state.initialRobots[robotIdx];
+	}
+
+	robotsCount = state.robotsCount;
+	functioningRobotsCount = state.functioningRobotsCount;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void State::setRobotTrace(
+	const Coords& position,
+	VisitedFlags robotDirectionFlag
+) {
+	getVisitedFlags(position) |= robotDirectionFlag;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void State::addRobotsCount(int8_t robotsCount) {
+	this->robotsCount = robotsCount;
+	functioningRobotsCount = robotsCount;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void State::addRobot(int8_t idx, int8_t x, int8_t y, RobotDirection direction) {
+	initialRobots[idx].setPosition(Coords(x, y));
+	initialRobots[idx].setDirection(direction);
+
+	robots[idx] = initialRobots[idx];
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+bool State::checkRobotDirection(const Coords& position, VisitedFlags robotDirectionFlag) {
+	return getVisitedFlags(position) & robotDirectionFlag;
 }
 
 //*************************************************************************************************************
@@ -762,8 +872,7 @@ int State::simulate(const Board& boardState) {
 					robot.setFirstTurn(false);
 				}
 
-				// Mark current robot move
-				
+				setRobotTrace(robot.getPosiiton(), makeRobotVisitedFlag(robotIdx, robot.getDirection()));
 				robot.move();
 
 				if (boardState.getCell(robot.getPosiiton()) & Masks::VOID) {
@@ -774,7 +883,7 @@ int State::simulate(const Board& boardState) {
 					robot.rotate(boardState.getCell(robot.getPosiiton()));
 
 					// Robot was here in this direction, destroy it
-					if () {
+					if (checkRobotDirection(robot.getPosiiton(), makeRobotVisitedFlag(robotIdx, robot.getDirection()))) {
 						robot.destroyRobot();
 						--functioningRobotsCount;
 					}
@@ -782,6 +891,46 @@ int State::simulate(const Board& boardState) {
 			}
 		}
 	}
+
+	return score;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+VisitedFlags State::makeRobotVisitedFlag(int8_t robotIdx, RobotDirection robotDirection) {
+	VisitedFlags flag = DEFAULT_FLAG;
+	flag >>= robotIdx * ROBOT_DIRECTION;
+
+	switch (robotDirection) {
+		//case RobotDirection::UP: {
+		//	flag >>= 0;
+		//	break;
+		//}
+		case RobotDirection::RIGHT: {
+			flag >>= 1;
+			break;
+		}
+		case RobotDirection::DOWN: {
+			flag >>= 2;
+			break;
+		}
+		case RobotDirection::LEFT: {
+			flag >>= 3;
+			break;
+		}
+		default: {
+			break;
+		}
+	}
+	return flag;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+VisitedFlags& State::getVisitedFlags(const Coords& coords) {
+	return visitedFlags[coords.getYCoord()][coords.getXCoord()];
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -1089,6 +1238,7 @@ public:
 	const string& getBestMoves() const { return bestMoves; }
 
 	void setTurnBoard(const Board& turnBoard) { this->turnBoard = turnBoard; }
+	void setState(const State& state) { this->state = state; }
 
 	void build();
 	void createChildren(NodeId parentId, ChildrenList& children);
@@ -1100,6 +1250,7 @@ private:
 	NodeId bestChild;
 	int bestScore;
 	string bestMoves;
+	State state;
 
 	Graph gameTree;
 };
@@ -1112,6 +1263,7 @@ GameTree::GameTree() :
 	bestChild(INVALID_NODE_ID),
 	bestScore(0),
 	bestMoves(EMPTY_STRING),
+	state(),
 	gameTree()
 {
 
@@ -1168,8 +1320,13 @@ void GameTree::createChildren(NodeId parentId, ChildrenList& children) {
 		}
 	}
 	else {
-		// Board full
-		// Proceed with simulating all robots at once
+		int score = state.simulate(parentBoardState);
+		if (score > bestScore) {
+			bestScore = score;
+			bestChild = parentId;
+		}
+
+		state.reset();
 	}
 }
 
@@ -1187,7 +1344,8 @@ void GameTree::updateBestChild(NodeId childNodeId, int score) {
 //*************************************************************************************************************
 
 void GameTree::gatherMosves() {
-	// Traverse the best board to get move
+	Node* bestNode = gameTree.getNode(bestChild);
+	bestNode->getBoardState().getMoves(bestMoves);
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -1217,6 +1375,7 @@ private:
 	int turnsCount;
 
 	Board gameBoard;
+	State state;
 	GameTree gameTree;
 };
 
@@ -1226,6 +1385,7 @@ private:
 Game::Game() :
 	turnsCount(0),
 	gameBoard(),
+	state(),
 	gameTree()
 {
 
@@ -1284,7 +1444,7 @@ void Game::getGameInput() {
 
 	int robotCount;
 	cin >> robotCount; cin.ignore();
-	//gameState.setFunctioningRobotsCount(robotCount);
+	state.addRobotsCount(static_cast<int8_t>(robotCount));
 
 	for (int i = 0; i < robotCount; i++) {
 		int x;
@@ -1292,11 +1452,12 @@ void Game::getGameInput() {
 		string direction;
 		cin >> x >> y >> direction; cin.ignore();
 
-		//gameState.addRobot(
-		//	static_cast<int8_t>(x),
-		//	static_cast<int8_t>(y),
-		//	static_cast<RobotDirection>(direction[0])
-		//);
+		state.addRobot(
+			static_cast<int8_t>(i),
+			static_cast<int8_t>(x),
+			static_cast<int8_t>(y),
+			static_cast<RobotDirection>(direction[0])
+		);
 	}
 }
 
@@ -1317,6 +1478,7 @@ void Game::turnBegin() {
 
 void Game::makeTurn() {
 	gameTree.setTurnBoard(gameBoard);
+	gameTree.setState(state);
 	gameTree.build();
 	gameTree.gatherMosves();
 	cout << gameTree.getBestMoves() << endl;
