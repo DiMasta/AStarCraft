@@ -18,7 +18,7 @@
 using namespace std;
 
 //#define OUTPUT_GAME_DATA
-#define REDIRECT_CIN_FROM_FILE
+//#define REDIRECT_CIN_FROM_FILE
 //#define REDIRECT_COUT_TO_FILE
 #define DEBUG_ONE_TURN
 
@@ -33,6 +33,7 @@ static const int TREE_ROOT_NODE_DEPTH = 1;
 static const int ZERO_CHAR = '0';
 static const int DIRECTIONS_COUNT = 9;
 static const int BYTE_SIZE = 8;
+static const int MAX_DEPTH = 7;
 
 static const int8_t ROBOT_DIRECTION = 4;
 static const int8_t BOARD_WIDTH = 19;
@@ -951,7 +952,7 @@ const NodeId INVALID_NODE_ID = -1;
 class Node {
 public:
 	Node();
-	Node(NodeId id, NodeId parentId, const Board& state);
+	Node(NodeId id, NodeId parentId, int nodeDepth, const Board& state);
 	~Node();
 
 	NodeId getId() const {
@@ -962,17 +963,23 @@ public:
 		return parentId;
 	}
 
+	int getNodeDepth() const {
+		return nodeDepth;
+	}
+
 	Board& getBoardState() {
 		return boardState;
 	}
 
 	void setId(NodeId id) { this->id = id; }
 	void setParentId(NodeId parentId) { this->parentId = parentId; }
+	void setNodeDepth(int nodeDepth) { this->nodeDepth = nodeDepth; }
 	void setBoardState(const Board& boardState) { this->boardState = boardState; }
 
 private:
 	NodeId id;
 	NodeId parentId; // Could be removed after debugging is good
+	int nodeDepth;
 
 	Board boardState;
 };
@@ -983,6 +990,7 @@ private:
 Node::Node() :
 	id(INVALID_NODE_ID),
 	parentId(INVALID_NODE_ID),
+	nodeDepth(0),
 	boardState()
 {
 
@@ -991,9 +999,10 @@ Node::Node() :
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-Node::Node(NodeId id, NodeId parentId, const Board& boardState) :
+Node::Node(NodeId id, NodeId parentId, int nodeDepth, const Board& boardState) :
 	id(id),
 	parentId(parentId),
+	nodeDepth(nodeDepth),
 	boardState(boardState)
 {
 
@@ -1198,11 +1207,11 @@ NodeId Graph::createNode(
 
 	if (!nodeCreated(nodeId)) {
 		int nodeDepth = 0;
-		//if (parentId != INVALID_NODE_ID) {
-		//	nodeDepth = 1 + idNodeMap[parentId]->getNodeDepth();
-		//}
+		if (parentId != INVALID_NODE_ID) {
+			nodeDepth = 1 + idNodeMap[parentId]->getNodeDepth();
+		}
 
-		Node* node = new Node(nodeId, parentId, boardState);
+		Node* node = new Node(nodeId, parentId, nodeDepth, boardState);
 		idNodeMap[nodeId] = node;
 		graph[nodeId];
 
@@ -1317,7 +1326,7 @@ void GameTree::createChildren(NodeId parentId, ChildrenList& children) {
 	Coords clearCellCoords;
 	parentBoardState.findFirstClearCell(clearCellCoords);
 
-	if (clearCellCoords.isValid()) {
+	if (clearCellCoords.isValid() && parent->getNodeDepth() < MAX_DEPTH) {
 		for (Cell mark : POSSIBLE_CELL_MARKS) {
 			if (parentBoardState.isMarkPossible(clearCellCoords, mark)) {
 				NodeId childNodeId = gameTree.createNode(parent->getId(), parentBoardState);
